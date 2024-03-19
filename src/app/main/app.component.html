@@ -1,0 +1,21 @@
+<div class="app-root">
+  <mat-toolbar color="primary">
+    <span>Hackathon2024</span>
+    <span class="horizontal-spacer"></span>
+    <button mat-button (click)="addGeoJson()">Add Geojson</button>
+    <button mat-button [matMenuTriggerFor]="menu">Layer</button>
+    <mat-menu #menu="matMenu">
+      @for (layer of layers; track layer.name) {
+        <button mat-menu-item (click)="onLayerSelected(layer.style)">{{ layer.name }}</button>
+      }
+    </mat-menu>
+  </mat-toolbar>
+
+  <div class="content">
+    <div class="map full-width-height" id="map"></div>
+
+    <router-outlet />
+  </div>
+
+</div>
+
