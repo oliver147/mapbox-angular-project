@@ -1,4 +1,4 @@
-import {Component, OnInit} from '@angular/core';
+import {Component, contentChild, OnInit} from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import {MatToolbar} from "@angular/material/toolbar";
 import {MatButton, MatIconButton} from "@angular/material/button";
@@ -7,7 +7,7 @@ import * as mapboxgl from "mapbox-gl";
 import {environment} from "../environment/environment";
 import {MatMenu, MatMenuItem, MatMenuTrigger} from "@angular/material/menu";
 import * as turf from '@turf/turf'
-import {AllGeoJSON, BBox} from "@turf/turf";
+import {AllGeoJSON, BBox, LineString, Point} from "@turf/turf";
 import rectangleGrid from "@turf/rectangle-grid";
 import {Feature, Polygon, Units} from "@turf/helpers";
 
@@ -35,13 +35,19 @@ export class AppComponent implements OnInit {
 
   config = {
     plotLength: 10, //7.5,
-    workingWidth: 5, //2.7,
-    plotsPerWorkingWidth: 2,//2,
+    workingWidth: 6, //2.7,
+    plotsPerWorkingWidth: 3,//2,
     xGap: 2,
     yGap: 4,
-    xCount: 5,
-    yCount: 6
+    xCount: 50,
+    yCount: 60
   }
+  plots: any[] = [];
+  plotLabels: any[] = [];
+  alleyLines: any[] = [];
+  sowingLines: any[] = [];
+  origin =  turf.point([9.877796, 51.811732]);
+  angle = 45;
 
   public ngOnInit(): void {
     this.initMap();
@@ -513,7 +519,7 @@ export class AppComponent implements OnInit {
       source: 'point',
       layout: {},
       paint: {
-        'circle-color': '#ff6c00',
+        'circle-color': '#003cff',
         'circle-radius': 6,
         'circle-stroke-width': 2,
         'circle-stroke-color': '#fff'
@@ -566,13 +572,19 @@ export class AppComponent implements OnInit {
   }
 
   public generatePlotLayout() {
-    // step 01: rectangel grid
 
+    this.generatePlots();
+    this.generateAlleyLines();
+    this.generateSowingLines();
+
+
+
+  }
+
+  private generatePlots() {
     const gridFeatureCollection = this.getRectGrid();
 
     let label = 1;
-    const plots: any[] = [];
-    const plotLabels: any[] = [];
 
     gridFeatureCollection.features.forEach(feature => {
       const plotWidth = this.config.workingWidth/this.config.plotsPerWorkingWidth
@@ -588,25 +600,27 @@ export class AppComponent implements OnInit {
 
       const center = turf.centroid(plot);
       center.properties = { label: label++ };
-      plotLabels.push(center);
+      this.plotLabels.push(center);
 
-      plots.push(plot);
+      this.plots.push(plot);
 
       for (let i = 1; i < this.config.plotsPerWorkingWidth; i++) {
         let clone: Feature<Polygon> = structuredClone(plot);
         clone = turf.transformTranslate(clone, plotWidth * i, 90, this.options);
-        plots.push(clone);
+        this.plots.push(clone);
 
         const center = turf.centroid(clone);
         center.properties = { label: label++ };
-        plotLabels.push(center);
+        this.plotLabels.push(center);
       }
 
 
     });
 
-    const plotsFC = turf.featureCollection(plots);
-    const lablesFC = turf.featureCollection(plotLabels);
+    let plotsFC = turf.featureCollection(this.plots);
+    plotsFC = turf.transformRotate(plotsFC, this.angle, {pivot: this.origin});
+    let lablesFC = turf.featureCollection(this.plotLabels);
+    lablesFC = turf.transformRotate(lablesFC, this.angle, {pivot: this.origin});
 
 
     this.map.addSource(
@@ -634,7 +648,8 @@ export class AppComponent implements OnInit {
       source: 'plots',
       layout: {},
       paint: {
-        'fill-color': '#00b2ff',
+        'fill-color': '#24fc7a',
+        'fill-opacity': 0.5,
       }
     });
 
@@ -644,7 +659,7 @@ export class AppComponent implements OnInit {
       source: 'plots',
       layout: {},
       paint: {
-        'line-color': '#0014a9',
+        'line-color': '#007701',
         'line-width': 2,
       }
     });
@@ -656,11 +671,97 @@ export class AppComponent implements OnInit {
       layout: {
         'text-field': ['format', ['get', 'label'], { 'font-size': 1 }],
         'text-offset': [0, 0],
-        'text-anchor': 'center'
+        'text-anchor': 'center',
+        'text-rotate': this.angle-90
       },
     });
 
+  }
 
+  private generateAlleyLines() {
+
+    let startPointAlley = turf.transformTranslate(this.origin, this.config.plotLength + this.config.yGap/2, 0, this.options);
+    startPointAlley = turf.transformTranslate(startPointAlley, this.config.xGap/2, 270, this.options);
+    let endPointAlley: Feature<Point> = structuredClone(startPointAlley);
+    endPointAlley = turf.transformTranslate(endPointAlley, this.getContainerWidth(), 90, this.options);
+
+    const alleyLine = turf.lineString([startPointAlley.geometry.coordinates, endPointAlley.geometry.coordinates]);
+    this.alleyLines.push(alleyLine);
+
+    for (let i = 1; i <= this.config.yCount - 2; i++) {
+      let clone: Feature<LineString> = structuredClone(alleyLine);
+      clone = turf.transformTranslate(clone, (this.config.plotLength + this.config.yGap) * i, 0, this.options);
+      this.alleyLines.push(clone);
+    }
+
+    const alleyLinesFC = turf.transformRotate(turf.featureCollection(this.alleyLines), this.angle, {pivot: this.origin});
+
+
+    this.map.addSource(
+      'alleyLines',
+      {
+        type: 'geojson',
+        data: alleyLinesFC
+      }
+    );
+
+    this.map.addLayer({
+      id: 'alleyLines',
+      type: 'line',
+      source: 'alleyLines',
+      layout: {},
+      paint: {
+        'line-color': '#ff00dd',
+        'line-width': 2,
+      }
+    });
+  }
+
+  private generateSowingLines() {
+
+    let startPoint = turf.transformTranslate(this.origin, this.config.workingWidth/2, 90, this.options);
+    startPoint = turf.transformTranslate(startPoint, this.config.yGap/2, 180, this.options);
+    let endPoint: Feature<Point> = structuredClone(startPoint);
+    endPoint = turf.transformTranslate(endPoint, this.getContainerHeight(), 0, this.options);
+
+    const line = turf.lineString([startPoint.geometry.coordinates, endPoint.geometry.coordinates]);
+    this.sowingLines.push(line);
+
+    for (let i = 1; i <= this.config.xCount - 1; i++) {
+      let clone: Feature<LineString> = structuredClone(line);
+      clone = turf.transformTranslate(clone, (this.config.workingWidth + this.config.xGap) * i, 90, this.options);
+      this.sowingLines.push(clone);
+    }
+
+    const sowingLinesFC = turf.transformRotate(turf.featureCollection(this.sowingLines), this.angle, {pivot: this.origin});
+
+
+    this.map.addSource(
+      'sowingLines',
+      {
+        type: 'geojson',
+        data: sowingLinesFC
+      }
+    );
+
+    this.map.addLayer({
+      id: 'sowingLines',
+      type: 'line',
+      source: 'sowingLines',
+      layout: {},
+      paint: {
+        'line-color': '#ff8e00',
+        'line-width': 2,
+      }
+    });
+  }
+
+  private getContainerWidth() {
+    return this.config.xCount * (this.config.workingWidth + this.config.xGap)
+  }
+
+  private getContainerHeight() {
+    return this.config.yCount * (this.config.plotLength + this.config.yGap)
   }
 
   private getRectGrid() {
@@ -670,17 +771,12 @@ export class AppComponent implements OnInit {
     const cellWidth = this.config.workingWidth + this.config.xGap;
     const cellHeight = this.config.plotLength + this.config.yGap;
 
-    const containerWidth = cellWidth * this.config.xCount;
-    const containerHeight = cellHeight * this.config.yCount;
 
-    const lng = 9.877796;
-    const lat = 51.811732;
-    const minXMinY = turf.point([lng, lat]);
-    const maxXMínY = turf.transformTranslate(minXMinY, containerWidth+0.1, 90, this.options);
-    const maxXMaxY = turf.transformTranslate(maxXMínY, containerHeight+0.1, 0, this.options);
+    const maxXMínY = turf.transformTranslate(this.origin, this.getContainerWidth()+0.001, 90, this.options);
+    const maxXMaxY = turf.transformTranslate(maxXMínY, this.getContainerHeight()+0.001, 0, this.options);
 
     // [minX, minY, maxX, maxY]
-    const bbox: BBox = [minXMinY.geometry.coordinates[0], minXMinY.geometry.coordinates[1], maxXMaxY.geometry.coordinates[0], maxXMaxY.geometry.coordinates[1]];
+    const bbox: BBox = [this.origin.geometry.coordinates[0], this.origin.geometry.coordinates[1], maxXMaxY.geometry.coordinates[0], maxXMaxY.geometry.coordinates[1]];
     const grid = rectangleGrid(bbox, cellWidth, cellHeight, this.options);
 
     return grid;
