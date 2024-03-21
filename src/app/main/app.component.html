@@ -3,6 +3,7 @@
     <span>Hackathon2024</span>
     <span class="horizontal-spacer"></span>
     <button mat-button (click)="addGeoJson()">Add Geojson</button>
+    <button mat-button (click)="generatePlotLayout()">Generate Plot layout</button>
     <button mat-button [matMenuTriggerFor]="menu">Layer</button>
     <mat-menu #menu="matMenu">
       @for (layer of layers; track layer.name) {

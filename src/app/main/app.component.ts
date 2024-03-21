@@ -7,7 +7,8 @@ import * as mapboxgl from "mapbox-gl";
 import {environment} from "../environment/environment";
 import {MatMenu, MatMenuItem, MatMenuTrigger} from "@angular/material/menu";
 import * as turf from '@turf/turf'
-import {AllGeoJSON } from "@turf/turf";
+import {AllGeoJSON, BBox} from "@turf/turf";
+import rectangleGrid from "@turf/rectangle-grid";
 
 @Component({
   selector: 'app-root',
@@ -546,8 +547,48 @@ export class AppComponent implements OnInit {
         'text-anchor': 'center'
       },
     });
+  }
+
+  public generatePlotLayout() {
+    // step 01: rectangel grid
+
+    const gridFeatureCollection = this.getRectGrid();
+
+    this.map.addSource(
+      'rectangleGrid',
+      {
+        type: 'geojson',
+        data: gridFeatureCollection
+      }
+    );
+
+    this.map.addLayer({
+      id: 'rectangleGridOutline',
+      type: 'line',
+      source: 'rectangleGrid',
+      layout: {},
+      paint: {
+        'line-color': '#ff0000',
+        'line-width': 2,
+      }
+    });
 
 
+  }
+
+  private getRectGrid() {
+    // 51.811732, 9.877796
+    // 51.809031, 9.884867
+
+    //  [minX, minY, maxX, maxY]
+    const bbox: BBox = [9.877796, 51.809031, 9.884867, 51.811732];
+    const cellWidth = 5;
+    const cellHeight = 10;
+    const options = {units: 'meters'};
+
+    // @ts-ignore
+    const grid = rectangleGrid(bbox, cellWidth, cellHeight, options);
+    return grid;
   }
 
   private initMap() {
