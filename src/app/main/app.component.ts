@@ -9,6 +9,7 @@ import {MatMenu, MatMenuItem, MatMenuTrigger} from "@angular/material/menu";
 import * as turf from '@turf/turf'
 import {AllGeoJSON, BBox} from "@turf/turf";
 import rectangleGrid from "@turf/rectangle-grid";
+import {Feature, Polygon, Units} from "@turf/helpers";
 
 @Component({
   selector: 'app-root',
@@ -26,6 +27,21 @@ export class AppComponent implements OnInit {
     // {name: 'Light', style: 'mapbox://styles/mapbox/light-v11'},
     // {name: 'Dark', style: 'mapbox://styles/mapbox/dark-v11'},
   ];
+  options: {
+    units?: Units;
+    zTranslation?: number;
+    mutate?: boolean;
+  } = {units: 'meters'};
+
+  config = {
+    plotLength: 10, //7.5,
+    workingWidth: 5, //2.7,
+    plotsPerWorkingWidth: 2,//2,
+    xGap: 2,
+    yGap: 4,
+    xCount: 5,
+    yCount: 6
+  }
 
   public ngOnInit(): void {
     this.initMap();
@@ -554,40 +570,119 @@ export class AppComponent implements OnInit {
 
     const gridFeatureCollection = this.getRectGrid();
 
+    let label = 1;
+    const plots: any[] = [];
+    const plotLabels: any[] = [];
+
+    gridFeatureCollection.features.forEach(feature => {
+      const plotWidth = this.config.workingWidth/this.config.plotsPerWorkingWidth
+      const bBox = turf.bbox(feature);
+      const minXMinY = turf.point([bBox[0], bBox[1]]);
+
+      const maxXMínY = turf.transformTranslate(minXMinY, plotWidth, 90, this.options);
+      const maxXMaxY = turf.transformTranslate(maxXMínY, this.config.plotLength, 0, this.options);
+
+      // [minX, minY, maxX, maxY]
+      const bbox: BBox = [minXMinY.geometry.coordinates[0], minXMinY.geometry.coordinates[1], maxXMaxY.geometry.coordinates[0], maxXMaxY.geometry.coordinates[1]];
+      let plot = turf.bboxPolygon(bbox);
+
+      const center = turf.centroid(plot);
+      center.properties = { label: label++ };
+      plotLabels.push(center);
+
+      plots.push(plot);
+
+      for (let i = 1; i < this.config.plotsPerWorkingWidth; i++) {
+        let clone: Feature<Polygon> = structuredClone(plot);
+        clone = turf.transformTranslate(clone, plotWidth * i, 90, this.options);
+        plots.push(clone);
+
+        const center = turf.centroid(clone);
+        center.properties = { label: label++ };
+        plotLabels.push(center);
+      }
+
+
+    });
+
+    const plotsFC = turf.featureCollection(plots);
+    const lablesFC = turf.featureCollection(plotLabels);
+
+
     this.map.addSource(
-      'rectangleGrid',
+      'plots',
       {
         type: 'geojson',
-        data: gridFeatureCollection
+        data: plotsFC
       }
     );
 
+    this.map.addSource(
+      'plotLabels',
+      {
+        type: 'geojson',
+        data: lablesFC
+      }
+    );
+
+
+    // ADD LAYERS TO MAP
+
     this.map.addLayer({
-      id: 'rectangleGridOutline',
-      type: 'line',
-      source: 'rectangleGrid',
+      id: 'plotsFill',
+      type: 'fill',
+      source: 'plots',
       layout: {},
       paint: {
-        'line-color': '#ff0000',
+        'fill-color': '#00b2ff',
+      }
+    });
+
+    this.map.addLayer({
+      id: 'plotsOutline',
+      type: 'line',
+      source: 'plots',
+      layout: {},
+      paint: {
+        'line-color': '#0014a9',
         'line-width': 2,
       }
+    });
+
+    this.map.addLayer({
+      id: 'plot_label',
+      type: 'symbol',
+      source: 'plotLabels',
+      layout: {
+        'text-field': ['format', ['get', 'label'], { 'font-size': 1 }],
+        'text-offset': [0, 0],
+        'text-anchor': 'center'
+      },
     });
 
 
   }
 
   private getRectGrid() {
-    // 51.811732, 9.877796
-    // 51.809031, 9.884867
 
-    //  [minX, minY, maxX, maxY]
-    const bbox: BBox = [9.877796, 51.809031, 9.884867, 51.811732];
-    const cellWidth = 5;
-    const cellHeight = 10;
-    const options = {units: 'meters'};
 
-    // @ts-ignore
-    const grid = rectangleGrid(bbox, cellWidth, cellHeight, options);
+
+    const cellWidth = this.config.workingWidth + this.config.xGap;
+    const cellHeight = this.config.plotLength + this.config.yGap;
+
+    const containerWidth = cellWidth * this.config.xCount;
+    const containerHeight = cellHeight * this.config.yCount;
+
+    const lng = 9.877796;
+    const lat = 51.811732;
+    const minXMinY = turf.point([lng, lat]);
+    const maxXMínY = turf.transformTranslate(minXMinY, containerWidth+0.1, 90, this.options);
+    const maxXMaxY = turf.transformTranslate(maxXMínY, containerHeight+0.1, 0, this.options);
+
+    // [minX, minY, maxX, maxY]
+    const bbox: BBox = [minXMinY.geometry.coordinates[0], minXMinY.geometry.coordinates[1], maxXMaxY.geometry.coordinates[0], maxXMaxY.geometry.coordinates[1]];
+    const grid = rectangleGrid(bbox, cellWidth, cellHeight, this.options);
+
     return grid;
   }
 
