@@ -47,7 +47,7 @@ export class AppComponent implements OnInit {
   config = {
     plotLength: 10, //7.5,
     workingWidth: 6, //2.7,
-    plotsPerWorkingWidth: 3, //2,
+    plotsPerWorkingWidth: 1, //3,
     xGap: 2,
     yGap: 4,
     xCount: 10,
@@ -61,6 +61,7 @@ export class AppComponent implements OnInit {
   angle = 45;
   hoveredPolygonId = null;
   is3d = false;
+  plotsMinZoom = 16;
   draw: any;
 
 
@@ -1086,6 +1087,7 @@ export class AppComponent implements OnInit {
       const bbox: BBox = [minXMinY.geometry.coordinates[0], minXMinY.geometry.coordinates[1], maxXMaxY.geometry.coordinates[0], maxXMaxY.geometry.coordinates[1]];
       let plot = turf.bboxPolygon(bbox);
       plot.id = plotCount++;
+      plot.properties = { label: plot.id };
 
       this.plots.push(plot);
 
@@ -1097,6 +1099,7 @@ export class AppComponent implements OnInit {
         let clone: Feature<Polygon> = structuredClone(plot);
         clone = turf.transformTranslate(clone, plotWidth * i, 90, this.options);
         clone.id = plotCount++;
+        clone.properties = { label: clone.id };
         this.plots.push(clone);
 
         const center = turf.centroid(clone);
@@ -1132,7 +1135,8 @@ export class AppComponent implements OnInit {
         ]
 
       },
-      filter: ['==', '$type', 'Polygon']
+      filter: ['==', '$type', 'Polygon'],
+      minzoom: this.plotsMinZoom,
     });
 
     this.map.addLayer({
@@ -1144,7 +1148,8 @@ export class AppComponent implements OnInit {
         'line-color': '#007701',
         'line-width': 2,
       },
-      filter: ['==', '$type', 'Polygon']
+      filter: ['==', '$type', 'Polygon'],
+      minzoom: this.plotsMinZoom,
     });
 
     if (this.is3d) {
@@ -1161,7 +1166,8 @@ export class AppComponent implements OnInit {
 
           'fill-extrusion-opacity': 0.6
         },
-        filter: ['==', '$type', 'Polygon']
+        filter: ['==', '$type', 'Polygon'],
+        minzoom: this.plotsMinZoom,
       });
     }
 
@@ -1175,7 +1181,40 @@ export class AppComponent implements OnInit {
         'text-anchor': 'center',
         // 'text-rotate': this.angle - 90
       },
-      filter: ['==', '$type', 'Point']
+      filter: ['==', '$type', 'Point'],
+      minzoom: this.plotsMinZoom + 1,
+    });
+
+    this.map.addLayer(
+      {
+        id: 'highlighted',
+        type: 'line',
+        source: 'plots',
+        //'source-layer': 'plotsFill',
+        paint: {
+          'line-color': '#ea0000',
+          'line-width': 4,
+        },
+        filter: ['in', 'label', ''],
+        minzoom: this.plotsMinZoom,
+      },
+    );
+
+    this.map.on('click', (e) => {
+
+      const bbox = [
+        [e.point.x, e.point.y],
+        [e.point.x, e.point.y]
+      ];
+
+      const selectedFeatures = this.map.queryRenderedFeatures(bbox, {
+        layers: ['plotsFill']
+      });
+      const labels = selectedFeatures.map(
+        (feature) => feature.properties.label
+      );
+
+      this.map.setFilter('highlighted', ['in', 'label', ...labels]);
     });
 
     this.map.on('mousemove', 'plotsFill', (e) => {
