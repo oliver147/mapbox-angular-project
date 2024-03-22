@@ -20,10 +20,12 @@
     "@angular/platform-browser": "^17.3.0",
     "@angular/platform-browser-dynamic": "^17.3.0",
     "@angular/router": "^17.3.0",
+    "@mapbox/mapbox-gl-draw": "^1.4.3",
     "@turf/angle": "^6.5.0",
     "@turf/rectangle-grid": "^6.5.0",
     "@turf/turf": "^6.5.0",
     "mapbox-gl": "^3.2.0",
+    "mapbox-gl-draw-snap-mode": "^0.2.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
     "zone.js": "~0.14.3"
