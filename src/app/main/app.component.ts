@@ -578,10 +578,37 @@ export class AppComponent implements OnInit {
 
   public generatePlotLayout() {
 
+    this.getABLine();
     this.generatePlots();
     this.generateAlleyLines();
     this.generateSowingLines();
 
+  }
+
+  private getABLine() {
+    const bPoint = [9.885896, 51.814232];
+
+    const abLine = turf.lineString([this.origin.geometry.coordinates, bPoint]);
+    this.angle = turf.angle(this.origin.geometry.coordinates,bPoint,bPoint) - 90;
+
+    this.map.addSource(
+      'abLine',
+      {
+        type: 'geojson',
+        data: abLine
+      }
+    );
+
+    this.map.addLayer({
+      id: 'abLine',
+      type: 'line',
+      source: 'abLine',
+      layout: {},
+      paint: {
+        'line-color': '#023E8A',
+        'line-width': 2,
+      }
+    });
   }
 
   private generatePlots() {
