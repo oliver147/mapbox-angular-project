@@ -4,6 +4,7 @@
     <span class="horizontal-spacer"></span>
     <button mat-button (click)="addGeoJson()">Add Geojson</button>
     <button mat-button (click)="generatePlotLayout()">Generate Plot layout</button>
+    <mat-slide-toggle [(ngModel)]="is3d"></mat-slide-toggle>
     <button mat-button [matMenuTriggerFor]="menu">Layer</button>
     <mat-menu #menu="matMenu">
       @for (layer of layers; track layer.name) {

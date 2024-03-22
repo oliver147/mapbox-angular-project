@@ -10,16 +10,18 @@ import * as turf from '@turf/turf'
 import {AllGeoJSON, BBox, LineString, Point} from "@turf/turf";
 import rectangleGrid from "@turf/rectangle-grid";
 import {Feature, Polygon, Units} from "@turf/helpers";
+import {MatSlideToggle} from "@angular/material/slide-toggle";
+import {FormsModule} from "@angular/forms";
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, MatToolbar, MatButton, MatIconButton, MatIcon, MatMenu, MatMenuTrigger, MatMenuItem],
+  imports: [RouterOutlet, MatToolbar, MatButton, MatIconButton, MatIcon, MatMenu, MatMenuTrigger, MatMenuItem, MatSlideToggle, FormsModule],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss'
 })
 export class AppComponent implements OnInit {
-  kwsHQCoords = [9.885015, 51.814994]
+  kwsHQCoords = turf.point([9.885015, 51.814994]);
   map: mapboxgl.Map;
   layers = [
     {name: 'Streets', style: 'mapbox://styles/mapbox/streets-v12'},
@@ -36,18 +38,21 @@ export class AppComponent implements OnInit {
   config = {
     plotLength: 10, //7.5,
     workingWidth: 6, //2.7,
-    plotsPerWorkingWidth: 3,//2,
+    plotsPerWorkingWidth: 3, //2,
     xGap: 2,
     yGap: 4,
-    xCount: 50,
-    yCount: 60
+    xCount: 10,
+    yCount: 10
   }
   plots: any[] = [];
   plotLabels: any[] = [];
   alleyLines: any[] = [];
   sowingLines: any[] = [];
-  origin =  turf.point([9.877796, 51.811732]);
+  origin =  turf.clone(this.kwsHQCoords);
   angle = 45;
+  hoveredPolygonId = null;
+  is3d = false;
+
 
   public ngOnInit(): void {
     this.initMap();
@@ -66,7 +71,7 @@ export class AppComponent implements OnInit {
       type: "Feature",
       geometry: {
         type: "Point",
-        coordinates: this.kwsHQCoords
+        coordinates: this.kwsHQCoords.geometry.coordinates
       },
       properties: {
         name: "KWS HQ"
@@ -519,7 +524,7 @@ export class AppComponent implements OnInit {
       source: 'point',
       layout: {},
       paint: {
-        'circle-color': '#003cff',
+        'circle-color': '#ff6c00',
         'circle-radius': 6,
         'circle-stroke-width': 2,
         'circle-stroke-color': '#fff'
@@ -532,7 +537,7 @@ export class AppComponent implements OnInit {
       source: 'point',
       layout: {
         'text-field': ['get', 'name'],
-        'text-offset': [0, 0],
+        'text-offset': [0, 0.1],
         'text-anchor': 'top'
       },
     });
@@ -554,7 +559,7 @@ export class AppComponent implements OnInit {
       source: 'polygon',
       layout: {},
       paint: {
-        'line-color': '#000',
+        'line-color': '#ff6c00',
         'line-width': 2,
       }
     });
@@ -577,70 +582,58 @@ export class AppComponent implements OnInit {
     this.generateAlleyLines();
     this.generateSowingLines();
 
-
-
   }
 
   private generatePlots() {
     const gridFeatureCollection = this.getRectGrid();
 
-    let label = 1;
+    let plotCount = 1;
 
     gridFeatureCollection.features.forEach(feature => {
       const plotWidth = this.config.workingWidth/this.config.plotsPerWorkingWidth
       const bBox = turf.bbox(feature);
       const minXMinY = turf.point([bBox[0], bBox[1]]);
 
-      const maxXMínY = turf.transformTranslate(minXMinY, plotWidth, 90, this.options);
-      const maxXMaxY = turf.transformTranslate(maxXMínY, this.config.plotLength, 0, this.options);
+      const maxXMinY = turf.transformTranslate(minXMinY, plotWidth, 90, this.options);
+      const maxXMaxY = turf.transformTranslate(maxXMinY, this.config.plotLength, 0, this.options);
 
       // [minX, minY, maxX, maxY]
       const bbox: BBox = [minXMinY.geometry.coordinates[0], minXMinY.geometry.coordinates[1], maxXMaxY.geometry.coordinates[0], maxXMaxY.geometry.coordinates[1]];
       let plot = turf.bboxPolygon(bbox);
-
-      const center = turf.centroid(plot);
-      center.properties = { label: label++ };
-      this.plotLabels.push(center);
+      plot.id = plotCount++;
 
       this.plots.push(plot);
+
+      const center = turf.centroid(plot);
+      center.properties = { label: plot.id };
+      this.plotLabels.push(center);
 
       for (let i = 1; i < this.config.plotsPerWorkingWidth; i++) {
         let clone: Feature<Polygon> = structuredClone(plot);
         clone = turf.transformTranslate(clone, plotWidth * i, 90, this.options);
+        clone.id = plotCount++;
         this.plots.push(clone);
 
         const center = turf.centroid(clone);
-        center.properties = { label: label++ };
+        center.properties = { label: clone.id };
         this.plotLabels.push(center);
       }
 
-
     });
 
-    let plotsFC = turf.featureCollection(this.plots);
-    plotsFC = turf.transformRotate(plotsFC, this.angle, {pivot: this.origin});
-    let lablesFC = turf.featureCollection(this.plotLabels);
-    lablesFC = turf.transformRotate(lablesFC, this.angle, {pivot: this.origin});
+    console.log(plotCount + ' plots created')
+
+    let featureCollection = turf.featureCollection(this.plots.concat(this.plotLabels));
+    featureCollection = turf.transformRotate(featureCollection, this.angle, {pivot: this.origin});
 
 
     this.map.addSource(
       'plots',
       {
         type: 'geojson',
-        data: plotsFC
+        data: featureCollection
       }
     );
-
-    this.map.addSource(
-      'plotLabels',
-      {
-        type: 'geojson',
-        data: lablesFC
-      }
-    );
-
-
-    // ADD LAYERS TO MAP
 
     this.map.addLayer({
       id: 'plotsFill',
@@ -648,9 +641,16 @@ export class AppComponent implements OnInit {
       source: 'plots',
       layout: {},
       paint: {
-        'fill-color': '#24fc7a',
-        'fill-opacity': 0.5,
-      }
+        'fill-color': '#007701',
+        'fill-opacity': [
+          'case',
+          ['boolean', ['feature-state', 'hover'], false],
+          1,
+          0.5
+        ]
+
+      },
+      filter: ['==', '$type', 'Polygon']
     });
 
     this.map.addLayer({
@@ -661,19 +661,71 @@ export class AppComponent implements OnInit {
       paint: {
         'line-color': '#007701',
         'line-width': 2,
-      }
+      },
+      filter: ['==', '$type', 'Polygon']
     });
 
+    if (this.is3d) {
+      this.map.addLayer({
+        id: 'plotsExtrusion',
+        type: 'fill-extrusion',
+        source: 'plots',
+        paint: {
+          'fill-extrusion-color': '#007701',
+
+          'fill-extrusion-height': 1, //['get', 'height'],
+
+          'fill-extrusion-base': 0, // ['get', 'base_height'],
+
+          'fill-extrusion-opacity': 0.6
+        },
+        filter: ['==', '$type', 'Polygon']
+      });
+    }
+
     this.map.addLayer({
-      id: 'plot_label',
+      id: 'plotsLabel',
       type: 'symbol',
-      source: 'plotLabels',
+      source: 'plots',
       layout: {
         'text-field': ['format', ['get', 'label'], { 'font-size': 1 }],
         'text-offset': [0, 0],
         'text-anchor': 'center',
-        'text-rotate': this.angle-90
+        // 'text-rotate': this.angle - 90
       },
+      filter: ['==', '$type', 'Point']
+    });
+
+    this.map.on('mousemove', 'plotsFill', (e) => {
+      if (e.features.length > 0) {
+        if (this.hoveredPolygonId !== null) {
+          this.map.setFeatureState(
+            { source: 'plots', id: this.hoveredPolygonId },
+            { hover: false }
+          );
+        }
+        this.hoveredPolygonId = e.features[0].id;
+        this.map.setFeatureState(
+          { source: 'plots', id: this.hoveredPolygonId },
+          { hover: true }
+        );
+      }
+    });
+
+    this.map.on('mouseleave', 'plotsFill', () => {
+      if (this.hoveredPolygonId !== null) {
+        this.map.setFeatureState(
+          { source: 'plots', id: this.hoveredPolygonId },
+          { hover: false }
+        );
+      }
+      this.hoveredPolygonId = null;
+    });
+
+
+    this.map.fitBounds(turf.bbox(featureCollection), {
+      pitch: this.is3d ? 80: 0,
+      bearing: this.is3d ? this.angle + 20: 0,
     });
 
   }
@@ -696,7 +748,6 @@ export class AppComponent implements OnInit {
 
     const alleyLinesFC = turf.transformRotate(turf.featureCollection(this.alleyLines), this.angle, {pivot: this.origin});
 
-
     this.map.addSource(
       'alleyLines',
       {
@@ -711,7 +762,7 @@ export class AppComponent implements OnInit {
       source: 'alleyLines',
       layout: {},
       paint: {
-        'line-color': '#ff00dd',
+        'line-color': '#d20085',
         'line-width': 2,
       }
     });
@@ -735,7 +786,6 @@ export class AppComponent implements OnInit {
 
     const sowingLinesFC = turf.transformRotate(turf.featureCollection(this.sowingLines), this.angle, {pivot: this.origin});
 
-
     this.map.addSource(
       'sowingLines',
       {
@@ -750,7 +800,7 @@ export class AppComponent implements OnInit {
       source: 'sowingLines',
       layout: {},
       paint: {
-        'line-color': '#ff8e00',
+        'line-color': '#ff7400',
         'line-width': 2,
       }
     });
@@ -766,14 +816,11 @@ export class AppComponent implements OnInit {
 
   private getRectGrid() {
 
-
-
     const cellWidth = this.config.workingWidth + this.config.xGap;
     const cellHeight = this.config.plotLength + this.config.yGap;
 
-
-    const maxXMínY = turf.transformTranslate(this.origin, this.getContainerWidth()+0.001, 90, this.options);
-    const maxXMaxY = turf.transformTranslate(maxXMínY, this.getContainerHeight()+0.001, 0, this.options);
+    const maxXMinY = turf.transformTranslate(this.origin, this.getContainerWidth()+0.001, 90, this.options);
+    const maxXMaxY = turf.transformTranslate(maxXMinY, this.getContainerHeight()+0.001, 0, this.options);
 
     // [minX, minY, maxX, maxY]
     const bbox: BBox = [this.origin.geometry.coordinates[0], this.origin.geometry.coordinates[1], maxXMaxY.geometry.coordinates[0], maxXMaxY.geometry.coordinates[1]];
@@ -788,7 +835,7 @@ export class AppComponent implements OnInit {
       container: 'map',
       style: this.layers[0].style,
       zoom: 12,
-      center: this.kwsHQCoords,
+      center: this.kwsHQCoords.geometry.coordinates,
     });
     this.map.addControl(new mapboxgl.NavigationControl());
 
