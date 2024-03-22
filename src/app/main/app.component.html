@@ -2,8 +2,7 @@
   <mat-toolbar color="primary">
     <span>Hackathon2024</span>
     <span class="horizontal-spacer"></span>
-    <button mat-button (click)="addGeoJson()">Add Geojson</button>
-    <button mat-button (click)="generatePlotLayout()">Generate Plot layout</button>
+    <button mat-button (click)="addGeoJson()">Add Field</button>
     <mat-slide-toggle [(ngModel)]="is3d"></mat-slide-toggle>
     <button mat-button [matMenuTriggerFor]="menu">Layer</button>
     <mat-menu #menu="matMenu">
