@@ -554,16 +554,16 @@ export class AppComponent implements OnInit {
       },
     });
 
-    this.map.addLayer({
-      id: 'polygon',
-      type: 'fill',
-      source: 'polygon',
-      layout: {},
-      paint: {
-        'fill-color': '#DDECD7',
-        'fill-opacity': 1,
-      }
-    });
+    // this.map.addLayer({
+    //   id: 'polygon',
+    //   type: 'fill',
+    //   source: 'polygon',
+    //   layout: {},
+    //   paint: {
+    //     'fill-color': '#DDECD7',
+    //     'fill-opacity': 1,
+    //   }
+    // });
 
     this.map.addLayer({
       id: 'polygon_outline',
@@ -1465,10 +1465,6 @@ export class AppComponent implements OnInit {
 
   private createABLine(selectedPoints: { features: Feature<LineString>[]}, map: mapboxgl.Map) {
     this.resetMap();
-    try {
-      map.removeLayer('abLine')
-      map.removeSource('abLine')
-  } catch {}
 
 
     if (selectedPoints.features[0].geometry.coordinates.length < 2)
@@ -1832,8 +1828,6 @@ export class AppComponent implements OnInit {
       this.map.on('draw.create', (values) => {
         this.createABLine(values, this.map)
       });
-
-      this.addGeoJson();
     });
   }
 
