@@ -174,6 +174,7 @@ export class AppComponent implements OnInit {
     this.map.removeLayer('alleyLines')
     this.map.removeLayer('sowingLines')
     this.map.removeLayer('abLine')
+    this.map.removeLayer('highlighted')
 
 
     this.map.removeSource('sowingLines')
